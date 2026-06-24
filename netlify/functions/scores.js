@@ -9,7 +9,6 @@ exports.handler = async function(event, context) {
   }
 
   try {
-    // FIFA World Cup 2026 competition ID = 2000
     const [matchesRes, standingsRes] = await Promise.all([
       fetch('https://api.football-data.org/v4/competitions/2000/matches', {
         headers: { 'X-Auth-Token': API_KEY }
@@ -22,7 +21,9 @@ exports.handler = async function(event, context) {
     const matchesData = await matchesRes.json();
     const standingsData = await standingsRes.json();
 
-    const live = (matchesData.matches || [])
+    const allMatches = matchesData.matches || [];
+
+    const live = allMatches
       .filter(m => m.status === 'IN_PLAY' || m.status === 'PAUSED')
       .map(m => ({
         home: m.homeTeam.tla || m.homeTeam.shortName,
@@ -35,7 +36,7 @@ exports.handler = async function(event, context) {
         status: m.status
       }));
 
-    const finished = (matchesData.matches || [])
+    const finished = allMatches
       .filter(m => m.status === 'FINISHED')
       .map(m => ({
         home: m.homeTeam.tla || m.homeTeam.shortName,
@@ -49,7 +50,7 @@ exports.handler = async function(event, context) {
         group: m.group
       }));
 
-    const upcoming = (matchesData.matches || [])
+    const upcoming = allMatches
       .filter(m => m.status === 'TIMED' || m.status === 'SCHEDULED')
       .map(m => ({
         home: m.homeTeam.tla || m.homeTeam.shortName,
@@ -59,6 +60,22 @@ exports.handler = async function(event, context) {
         date: m.utcDate,
         stage: m.stage,
         group: m.group
+      }));
+
+    // Knockout matches (ROUND_OF_16, QUARTER_FINALS, SEMI_FINALS, FINAL)
+    const knockoutStages = ['ROUND_OF_16','QUARTER_FINALS','SEMI_FINALS','FINAL'];
+    const knockout = allMatches
+      .filter(m => knockoutStages.includes(m.stage))
+      .map(m => ({
+        home: m.homeTeam.tla || m.homeTeam.shortName || null,
+        away: m.awayTeam.tla || m.awayTeam.shortName || null,
+        homeName: m.homeTeam.shortName || m.homeTeam.name || null,
+        awayName: m.awayTeam.shortName || m.awayTeam.name || null,
+        sh: m.score?.fullTime?.home ?? null,
+        sa: m.score?.fullTime?.away ?? null,
+        date: m.utcDate,
+        stage: m.stage,
+        status: m.status
       }));
 
     return {
@@ -71,6 +88,7 @@ exports.handler = async function(event, context) {
         live,
         finished,
         upcoming,
+        knockout,
         standings: standingsData.standings || [],
         updated: new Date().toISOString()
       })
